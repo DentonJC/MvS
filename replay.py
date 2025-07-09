@@ -61,6 +61,17 @@ class MIRReplay:
         self.args = args
         self.device = device
 
+    def forward_with_dropout(x):
+        # Re-implement forward pass with dropout before final layer
+        x = self.model.return_hidden(x)
+        x = torch.flatten(x, 1)
+        x = F.dropout(x, p=dropout_p, training=True) 
+        try:
+            x = self.model.fc(x)
+        except:
+            x = self.model.classifier(x)
+        return x
+    
     def get_grad_vector(self):
         grad_vector = []
         for param in self.model.parameters():
@@ -111,7 +122,9 @@ class MIRReplay:
             T = 10
             logits_mc = []
             for _ in range(T):
-                logits_mc.append(F.softmax(self.model(inputs), dim=1))
+                with torch.no_grad():
+                    logits = forward_with_dropout(inputs)
+                    logits_mc.append(F.softmax(logits, dim=1))
             probs = torch.stack(logits_mc)
             mean_probs = probs.mean(0)
             entropy1 = -torch.sum(mean_probs * torch.log(mean_probs + 1e-8), dim=1)
@@ -154,6 +167,7 @@ class MIRReplay:
             probs /= probs.sum()
             selected = torch.multinomial(probs, batch_size, replacement=False)
         selected = selected.cpu()
+        self.model.train()
         return inputs[selected].to(self.device), labels[selected].to(self.device), tasks[selected].to(self.device)
 
     def kmeans_select(self, batch_size):
@@ -192,6 +206,7 @@ class MIRReplay:
             selected_indices.append(selected)
     
         selected_indices = torch.tensor(selected_indices, dtype=torch.long)
+        self.model.train()
         return bx[selected_indices].to(self.device), by[selected_indices].to(self.device), bt[selected_indices].to(self.device)
 
 
@@ -227,9 +242,11 @@ class MIRReplay:
             remaining.remove(new_idx)
 
         selected_indices = torch.tensor(selected)
+        self.model.train()
         return bx[selected_indices].to(self.device), by[selected_indices].to(self.device), bt[selected_indices].to(self.device)
 
     def select_replay_samples(self, method, batch_size):
+        self.model.eval()
         if any(m in method for m in ['mir', 'entropy', 'confidence', 'margin', 'bayesian', 'random']):
             return self.select(method, batch_size)
         elif method == 'kmeans':
@@ -320,6 +337,7 @@ class Replay(SupervisedTemplate):
         for self.mbatch in self.dataloader:
             if self._stop_training:
                 break
+            self.model.train()
 
             self._unpack_minibatch()
             self._before_training_iteration(**kwargs)
