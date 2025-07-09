@@ -150,12 +150,14 @@ class MIRReplay:
             # Not enough samples, just return them all
             loader = DataLoader(dataset, batch_size=len(dataset))
             x, y, t = next(iter(loader))
+            self.model.train()
             return x.to(self.device), y.to(self.device), t.to(self.device)
 
         if method == "random":
             # Original behavior: random samples
             loader = DataLoader(dataset, batch_size=self.args.batch_size_mem, shuffle=True)
             x, y, t = next(iter(loader))
+            self.model.train()
             return x.to(self.device), y.to(self.device), t.to(self.device)
         
         inputs, labels, tasks, scores, descending = self.compute_scores(dataset, method)
