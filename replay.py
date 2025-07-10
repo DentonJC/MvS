@@ -61,7 +61,7 @@ class MIRReplay:
         self.args = args
         self.device = device
 
-    def forward_with_dropout(x):
+    def forward_with_dropout(self, x, dropout_p=0.2):
         # Re-implement forward pass with dropout before final layer
         x = self.model.return_hidden(x)
         x = torch.flatten(x, 1)
@@ -123,7 +123,7 @@ class MIRReplay:
             logits_mc = []
             for _ in range(T):
                 with torch.no_grad():
-                    logits = forward_with_dropout(inputs)
+                    logits = self.forward_with_dropout(inputs)
                     logits_mc.append(F.softmax(logits, dim=1))
             probs = torch.stack(logits_mc)
             mean_probs = probs.mean(0)
